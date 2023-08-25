@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands
 import queue
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
+import time
 
 class music_cog(commands.Cog):
     def __init__(self, bot) -> None:
@@ -22,8 +23,9 @@ class music_cog(commands.Cog):
             except Exception: 
                 return False
 
-        return {'link': info['formats'][0]['url'], 'title': info['title']}
+        return {'link': info['url'], 'title': info['title']}
     
+
     async def check_bot_status(self, ctx):
         if ctx.author.voice and ctx.author.voice.channel:
             if not self.voice_client:
@@ -31,6 +33,14 @@ class music_cog(commands.Cog):
                 self.voice_client = await ctx.author.voice.channel.connect()
             return True
         return False
+    
+    # def finished_playing(self, err):
+    #     if err:
+    #         print(f"ERROR: {err}")
+        
+    #     self.is_playing = False
+    
+
     @commands.command(name="play", help="Plays music that you search for on Youtube")
     async def play(self, ctx, *args):
         title = " ".join(args)
@@ -40,11 +50,21 @@ class music_cog(commands.Cog):
             await ctx.send("Unable to find song.")
             return
         
-        self.music_q.put(res)
         status = await self.check_bot_status(ctx)      
         if status:
-            url = self.music_q.get()['link']
-            self.voice_client.play(discord.FFmpegPCMAudio(url, **self.FFMPEG_OPTIONS), after=lambda e: print("terminated"))    
+            url, title = res['link'], res['title']            
+            #stop current music before executing play()
+            if self.is_playing:
+                print("Hello")
+                self.voice_client.stop()
+                #have to add delay because stop() function is delayed. not async though.
+                time.sleep(1)
+                
+            
+            self.is_playing = True
+            await ctx.send(f"Now playing... {title}")
+            self.voice_client.play(discord.FFmpegPCMAudio(url, **self.FFMPEG_OPTIONS), after=self.play_q)
+
         else:
             await ctx.send(f"Connect to a voice channel!")
         
@@ -64,7 +84,7 @@ class music_cog(commands.Cog):
         if not self.music_q.empty:
             res = self.music_q.get()
             link = res['link']
-            title = res['title']
+            self.curr = res['title']
             self.voice_client.play(discord.FFmpegPCMAudio(link, **self.FFMPEG_OPTIONS), after=lambda e: self.play_q)
         else:
             self.is_playing = False
@@ -72,7 +92,17 @@ class music_cog(commands.Cog):
     
     @commands.command(name="disconnect", help="Disconnects music bot from the voice channel")
     async def disconnect(self, ctx):
-        pass
+        if self.voice_client and self.voice_client.is_connected():
+            await self.voice_client.disconnect()
+            await ctx.send("Disconnected Bot.")
+    
+    @commands.command(name='next', help="Shows next song in queue")
+    async def next(self, ctx):
+        if self.music_q.empty():
+            await ctx.send("No songs left in queue")
+        else:
+            await ctx.send(f"Next song is: {q.queue[0]}")
 
 
-#vc.play(discord.FFmpegPCMAudio(m_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next())
+
+        

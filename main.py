@@ -18,15 +18,15 @@ async def on_ready():
 
 @bot.listen()
 async def on_message(message):
-    if message.author == bot.user:
+    if message.author == bot.user or message.content[0] == '!':
         return
-    print(message.content)
     await message.channel.send(f"Your message was: '{message.content}'")
 
 async def setup():
     await bot.add_cog(music_cog(bot))
     print("done")
 
+#loading cog
 asyncio.run(setup())
 
 
