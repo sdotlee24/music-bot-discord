@@ -34,12 +34,8 @@ class music_cog(commands.Cog):
             return True
         return False
     
-    # def finished_playing(self, err):
-    #     if err:
-    #         print(f"ERROR: {err}")
-        
-    #     self.is_playing = False
-    
+    async def play_after(self, ctx):
+        await self.play_q(ctx)
 
     @commands.command(name="play", help="Plays music that you search for on Youtube")
     async def play(self, ctx, *args):
@@ -63,7 +59,7 @@ class music_cog(commands.Cog):
             
             self.is_playing = True
             await ctx.send(f"Now playing... {title}")
-            self.voice_client.play(discord.FFmpegPCMAudio(url, **self.FFMPEG_OPTIONS), after=self.play_q)
+            self.voice_client.play(discord.FFmpegPCMAudio(url, **self.FFMPEG_OPTIONS), after=lambda e: self.bot.loop.create_task(self.play_after(ctx)))
 
         else:
             await ctx.send(f"Connect to a voice channel!")
@@ -75,33 +71,61 @@ class music_cog(commands.Cog):
         res = self.search_yt(title)
         if res:
             self.music_q.put(res)
+            print(self.music_q.queue[0])
             if not self.is_playing:
-                self.play_q(ctx)
+                print("22222222222222222222222")
+                await self.play_q(ctx)
+            print("33333333333333333333333333333")
         else:
             await ctx.send("Unable to play song.")
 
     async def play_q(self, ctx):
-        if not self.music_q.empty:
+        if not self.music_q.empty():
+            await self.check_bot_status(ctx)
             res = self.music_q.get()
             link = res['link']
             self.curr = res['title']
-            self.voice_client.play(discord.FFmpegPCMAudio(link, **self.FFMPEG_OPTIONS), after=lambda e: self.play_q)
+            self.is_playing = True
+            self.voice_client.play(discord.FFmpegPCMAudio(link, **self.FFMPEG_OPTIONS), after=lambda e: self.bot.loop.create_task(self.play_after(ctx)))
         else:
             self.is_playing = False
         
     
-    @commands.command(name="disconnect", help="Disconnects music bot from the voice channel")
+    @commands.command(name="disconnect", help="Disconnects music bot from the voice channel and resets Queue")
     async def disconnect(self, ctx):
         if self.voice_client and self.voice_client.is_connected():
             await self.voice_client.disconnect()
             await ctx.send("Disconnected Bot.")
+        self.music_q = queue.Queue()
+        self.voice_client = None
+        self.is_playing = False
+        self.curr = ""
+
+
     
     @commands.command(name='next', help="Shows next song in queue")
     async def next(self, ctx):
         if self.music_q.empty():
             await ctx.send("No songs left in queue")
         else:
-            await ctx.send(f"Next song is: {q.queue[0]}")
+            await ctx.send(f"Next song is: {self.music_q.queue[0]['title']}")
+    
+    @commands.command(name='pause', help='Pauses current song')
+    async def pause(self, ctx):
+        if self.voice_client:
+            if self.voice_client.is_playing():
+                self.voice_client.pause()
+        else:
+            await ctx.send("Action was not possible")
+    
+    @commands.command(name='resume', help='Resumes current song')
+    async def resume(self, ctx):
+        if self.voice_client:
+            if self.voice_client.is_paused():
+                self.voice_client.resume()
+                
+        else:
+            await ctx.send("Action was not possible")
 
 
 
