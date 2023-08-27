@@ -11,10 +11,22 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-@bot.listen()
+@bot.event
 async def on_ready():
     print(f"Logged in succesfully")
 
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    music_cog_instance = bot.cogs.get("music_cog")
+
+    if member == bot.user and before.channel and not after.channel:
+        if music_cog_instance:
+            sp_controller = music_cog_instance.sp_control
+            sp_controller.generate_recommended()
+            
+
+            
 
 @bot.listen()
 async def on_message(message):
